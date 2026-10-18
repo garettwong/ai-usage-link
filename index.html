@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AI Usage">
+<meta name="theme-color" content="#0f0f12">
+<title>AI Usage</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f0f12; color: #c3c2b7;
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 0 16px; text-align: center; }
+  h1 { color: #fff; font-size: 20px; margin: 0 0 6px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4fd44f; margin-right: 8px;
+         animation: p 1s ease-in-out infinite alternate; }
+  @keyframes p { from { opacity: .3 } to { opacity: 1 } }
+  button { margin-top: 14px; background: #232327; color: #fff; border: 1px solid #2c2c31; border-radius: 10px; padding: 10px 16px; font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="dot"></span>AI Usage</h1>
+  <div id="msg">Opening your dashboard…</div>
+  <button id="again" hidden onclick="location.reload()">Try again</button>
+</main>
+<script>
+// Permanent link -> today's dashboard link. link.json holds that link AES-GCM encrypted; the key is
+// in this page's #fragment, which the browser never sends to GitHub. The PC updates link.json
+// whenever its link changes (e.g. after a restart).
+const REPO_API = "https://api.github.com/repos/garettwong/ai-usage-link/contents/link.json?ref=main";
+const msg = t => { document.getElementById("msg").textContent = t; };
+const b64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+
+async function readLink() {
+  try {  // GitHub's API is always current; the Pages copy can lag a few minutes
+    const r = await fetch(REPO_API + "&t=" + Date.now(), { cache: "no-store", headers: { Accept: "application/vnd.github.raw+json" } });
+    if (r.ok) return await r.json();
+  } catch (e) {}
+  const r = await fetch("link.json?t=" + Date.now(), { cache: "no-store" });
+  return await r.json();
+}
+
+(async () => {
+  const keyText = location.hash.slice(1);
+  if (!keyText) { msg("This link is missing its key — use the full link from your PC."); return; }
+  try {
+    const d = await readLink();
+    const key = await crypto.subtle.importKey("raw", b64(keyText), "AES-GCM", false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(d.iv) }, key, b64(d.ct));
+    const url = new TextDecoder().decode(plain);
+    if (!/^https:\/\//.test(url)) throw new Error("bad link");
+    location.replace(url);
+  } catch (e) {
+    msg("Couldn't open the dashboard right now. Is the PC on? It updates this link a minute after it starts.");
+    document.getElementById("again").hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
